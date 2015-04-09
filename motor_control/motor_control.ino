@@ -6,15 +6,16 @@
 byte motordata; /* motor data code:
 
 
-0x42- "B" raise head - high value
-0x43- "C" lower head- low value
+0x42- "B" raise head
+0x43- "C" lower head
 0x44- "D" rotate rubik's claw
 0x45- "E" depress left-front button for Simon
 0x46- "F" depress left-rear button
-0x47- "G" depress right-front button 75
-0x48- "H" depress right-rear button 123
+0x47- "G" depress right-front button 
+0x48- "H" depress right-rear button 
 0x49- "I" open front claw
 0x4A- "J" close front claw
+0x4B- "K" turn off front claw motor (else it will continue to apply force to open or close the claw)
 0x61- "a" start stepper sequence from beginning
 0x62- "b" abort stepper motor attempt
 0x63- "c" pause stepper motor writing
