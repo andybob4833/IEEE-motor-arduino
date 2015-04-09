@@ -3,7 +3,7 @@
 #include <Servo.h>
 
 
-byte motorData; /* motor data code:
+byte motordata; /* motor data code:
 
 
 0x42- "B" raise head - high value
@@ -28,7 +28,7 @@ byte motorData; /* motor data code:
 #define LEFT_REAR 0x46
 #define RIGHT_FRONT 0x47
 #define RIGHT_REAR 0x48
-#define OPEN CLAW 0x49
+#define OPEN_CLAW 0x49
 #define CLOSE_CLAW 0x4A
 #define STEPPER_START 0x61
 #define STEPPER_ABORT 0x62
@@ -66,6 +66,11 @@ int instr[] = {2,1,1,4,1,1,4,7,8,8,8,8,8,8,8,8,8,8,9,8,9,6,6,6,6,6,3,3,3,3,3,3,3
 int instrlen = 295;
 
 boolean stepper_enabled = false;
+boolean leftWrittenRear = false;
+boolean rightWrittenRear = false;
+boolean rightActive = false;
+boolean leftActive = false;
+boolean rubiksActive = false;
 
 //misc global variable
 long lasttime = 0; //last time an operation has occured. May need to be changed to last time of stepper operation 
@@ -84,7 +89,7 @@ void setup() {
  
   frontClaw.attach(11);
   armLift.attach(PWM1_PIN); // PWM 1
-  rubiksTwist.attach(10);
+  
   leftSimon.attach(PWM2_PIN);// PWM 2
   rightSimon.attach(PWM3_PIN); // PWM 3
   stepper_init();
@@ -95,57 +100,78 @@ void setup() {
 }
 
 void loop() {
+
+  motordata = 0;
  while(Serial.available()) {
-   motorData = Serial.read();
+   motordata = Serial.read();
  }
- switch (motorData) {
-   case 0x42:
+ switch (motordata) {
+   case RAISE_HEAD:
      armLift.write(96);
+     Serial.write(0x42);
      break;
-   case 0x43:
-     armlift.write(84);
+   case LOWER_HEAD:
+     armLift.write(84);
+     Serial.write(0x43);
      break;
-   case 0x44:
-     rubiksTimer = millis() + 1000;
+   case ROTATE_CUBE:
+     rubiksTwist.attach(10);
+     rubiksTimer = millis() + 700;
      rubiksTwist.write(100);
+     rubiksActive = true;
      break;
-   case 0x45:
+   case LEFT_FRONT:
      simonLeftTimer = millis() + 1000;
-     leftSimon.write();//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     leftSimon.write(97);//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     leftWrittenRear = false;
+     leftActive = true;
      break;
-   case 0x46:
+   case LEFT_REAR:// left rear
      simonLeftTimer = millis() + 1000;
-     leftSimon.write();//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     leftSimon.write(55);//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     leftWrittenRear = true;
+     leftActive = true;
      break;     
-   case 0x47:
+   case RIGHT_FRONT:
      simonRightTimer = millis() + 1000;
      rightSimon.write(75);
+     rightWrittenRear = false;
+     rightActive = true;
      break;     
-   case 0x48:
+   case RIGHT_REAR:// right rear
      simonRightTimer = millis() + 1000;
      rightSimon.write(123);
+     rightWrittenRear = true;
+     rightActive = true;
      break;     
-   case 0x49: // high open, low close
-     frontClaw.write(95);
+   case OPEN_CLAW: // high open, low close
+     frontClaw.attach(11);
+     frontClaw.write(100);
+     Serial.write(OPEN_CLAW);
      break;     
-   case 0x4A:
+   case CLOSE_CLAW:
+     frontClaw.attach(11);
      frontClaw.write(85);
+     Serial.write(CLOSE_CLAW);
      break;     
-   case 0x61: // begin
+   case 0x4B:
+       frontClaw.detach();
+      Serial.write(0x4B);
+   case STEPPER_START: // begin
      stepper_enabled = true;
      stepper_enable();
      instri = 0;
      break;     
-   case 0x62: // abort
+   case STEPPER_ABORT: // abort
      stepper_enabled = false;
      stepper_disable();
      instri = 0;
      break;     
-   case 0x63: // pause
+   case STEPPER_PAUSE: // pause
      stepper_enabled = false;
      stepper_disable();
      break;     
-   case 0x64: // resume
+   case STEPPER_RESUME: // resume
      instri = 0;
      stepper_enable();
      break;   
@@ -153,14 +179,32 @@ void loop() {
      break;
      
  }
- if (millis() >= rubiksTimer) {
+ if ((millis() >= rubiksTimer) && rubiksActive) {
    rubiksTwist.write(90);
+   rubiksTwist.detach();
+   rubiksActive = false;
+   Serial.write(0x44);
+  
  }
- if (millis() >= simonLeftTimer) {
-   leftSimon.write();
+ if ((millis() >= simonLeftTimer) && leftActive) {
+   leftSimon.write(76);
+   leftActive = false;
+   if(leftWrittenRear) {
+     Serial.write(0x46);
+   }
+   else {
+     Serial.write(0x45);
+   }
  }
- if (millis() >= simonRightTimer) {
+ if ((millis() >= simonRightTimer) && rightActive) {
    rightSimon.write(99);
+   rightActive = false;
+   if(rightWrittenRear) {
+     Serial.write(0x48);
+   }
+   else {
+     Serial.write(0x47);
+   }
  }
  if (lasttime + STEP_DELAY < millis() && stepper_enabled) {
     
@@ -211,6 +255,9 @@ void loop() {
     }
     instri++;
     if (instri >= instrlen) { //if out of bounds
+      if(stepper_enabled == true) {
+        Serial.write(0x61); // echo the initiate command
+      }
       stepper_enabled = false;
       instri = 0;
       stepper_disable(); //stop everything
